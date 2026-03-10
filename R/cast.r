@@ -41,7 +41,7 @@
 #' @param value.var name of column which stores values, see
 #'   \code{\link{guess_value}} for default strategies to figure this out.
 #' @seealso \code{\link{melt}},  \url{http://had.co.nz/reshape/}
-#' @importFrom plyr alply amv_dimnames as.quoted eval.quoted id llply rbind.fill split_labels vaggregate
+#' @importFrom plyr alply amv_dimnames as.quoted eval.quoted llply rbind.fill split_labels vaggregate
 #' @import stringr
 #' @examples
 #' #Air quality example
@@ -91,6 +91,66 @@
 #' }
 #' @name cast
 NULL
+
+# replacement for plyr::id; it doesn't give the same result, but
+#   order(id(...)) matches order(plyr::id(...))
+# interaction(drop=drop) doesn't quite work because plyr::id() retains the
+#   actual level numbers as if drop=FALSE, whereas interaction compacts them
+#   into 1:attr(, "n"), the unique number of observed levels.
+id <- function(x, drop) {
+  if (length(x) == 0L) return(structure(integer(), n = 0L))
+
+  # Calculate number of levels for each vector
+  # For vectors that already had an explicit "n" attribute (e.g. from prior id() calls)
+  # we must use those directly instead of recomputing from observed discrete values.
+  ns <- vapply(seq_along(x), function(i) {
+    v <- x[[i]]
+    explicit_n <- attr(v, "n")
+    if (!is.null(explicit_n)) return(as.integer(explicit_n))
+    if (is.factor(v)) return(nlevels(v))
+    length(unique(v))
+  }, integer(1))
+
+  # Calculate integer values for each vector
+  vals <- lapply(seq_along(x), function(i) {
+    v <- x[[i]]
+    if (!is.null(attr(v, "n"))) return(as.integer(v))
+    if (is.factor(v)) return(as.integer(v))
+    # match includes NA by default if it's in the table
+    match(v, sort(unique(v), na.last = TRUE))
+  })
+
+  # We want the LAST variable to vary fastest.
+  # Weight for x[[i]] is prod(ns[(i+1):n])
+  n <- length(x)
+  weights <- rep(1, n)
+  if (n > 1) {
+    for (i in (n - 1):1) {
+      weights[i] <- weights[i + 1] * ns[i + 1]
+    }
+  }
+
+  res <- rep(1, length(vals[[1]]))
+  for (i in seq_along(vals)) {
+    res <- res + (vals[[i]] - 1) * weights[i]
+  }
+
+  if (drop) {
+    u <- unique(res)
+    # Sorts the unique generated IDs to be consistent.
+    su <- sort(u, na.last = TRUE)
+    res <- match(res, su)
+    # Ensure n is integer
+    n_attr <- as.integer(length(u))
+  } else {
+    # Ensure n is integer
+    n_attr <- as.integer(prod(ns))
+  }
+
+  res <- as.integer(res)
+  attr(res, "n") <- n_attr
+  res
+}
 
 cast <- function(data, formula, fun.aggregate = NULL, ..., subset = NULL, fill = NULL, drop = TRUE, value.var = guess_value(data), value_var) {
 

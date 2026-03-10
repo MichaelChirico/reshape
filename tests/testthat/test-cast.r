@@ -211,3 +211,53 @@ test_that("useful error message if value.var doesn't exist", {
   expect_error(dcast(airquality, month ~ day, value.var = "test"),
     "value.var (test) not found in input", fixed = TRUE)
 })
+
+test_that("id handles recursive ID calls correctly", {
+  # This mimics how cast() handles multiple variables on one dimension
+  x1 <- c("a", "a", "b")
+  x2 <- c("1", "2", "1")
+
+  id1 <- id(list(x1, x2), drop = FALSE)
+  expect_equal(attr(id1, "n"), 4L)
+  expect_equal(as.integer(id1), c(1L, 2L, 3L))
+
+  # Recursive call
+  id2 <- id(list(id1), drop = FALSE)
+  expect_equal(attr(id2, "n"), 4L)
+  expect_equal(as.integer(id2), c(1L, 2L, 3L))
+})
+
+test_that("id handles NAs consistently with drop", {
+  x <- c(1, 2, NA)
+
+  # drop = TRUE
+  id_t <- id(list(x), drop = TRUE)
+  expect_equal(attr(id_t, "n"), 3L)
+  expect_equal(as.integer(id_t), c(1L, 2L, 3L))
+
+  # drop = FALSE
+  id_f <- id(list(x), drop = FALSE)
+  expect_equal(attr(id_f, "n"), 3L)
+  expect_equal(as.integer(id_f), c(1L, 2L, 3L))
+})
+
+test_that("id handles factor levels with drop=FALSE", {
+  f <- factor(c("a", "a"), levels = c("a", "b"))
+  id_f <- id(list(f), drop = FALSE)
+  expect_equal(attr(id_f, "n"), 2L)
+  expect_equal(as.integer(id_f), c(1L, 1L))
+
+  id_t <- id(list(f), drop = TRUE)
+  expect_equal(attr(id_t, "n"), 1L)
+  expect_equal(as.integer(id_t), c(1L, 1L))
+})
+
+test_that("ordering is correct for multi-variable id", {
+  # Last variable varies fastest
+  x1 <- c(1, 1, 2, 2)
+  x2 <- c(1, 2, 1, 2)
+  res <- id(list(x1, x2), drop = FALSE)
+  # (1,1)->1, (1,2)->2, (2,1)->3, (2,2)->4
+  expect_equal(as.integer(res), 1:4)
+  expect_equal(attr(res, "n"), 4L)
+})
