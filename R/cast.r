@@ -41,7 +41,7 @@
 #' @param value.var name of column which stores values, see
 #'   \code{\link{guess_value}} for default strategies to figure this out.
 #' @seealso \code{\link{melt}},  \url{http://had.co.nz/reshape/}
-#' @importFrom plyr alply amv_dimnames as.quoted eval.quoted id llply rbind.fill split_labels vaggregate
+#' @importFrom plyr alply amv_dimnames as.quoted eval.quoted id llply rbind.fill vaggregate
 #' @import stringr
 #' @examples
 #' #Air quality example
@@ -91,6 +91,42 @@
 #' }
 #' @name cast
 NULL
+
+split_labels <- function(splits, drop, id = id(splits, drop = TRUE)) {
+  if (length(splits) == 0) return(data.frame())
+
+  if (drop) {
+    n <- attr(id, "n")
+    if (n == 0) {
+      grid <- data.frame(lapply(splits, function(x) x[0]), stringsAsFactors = FALSE)
+    } else {
+      # find the first index of each unique id
+      idx <- match(seq_len(n), id)
+      grid <- data.frame(lapply(splits, function(x) x[idx]), stringsAsFactors = FALSE)
+    }
+  } else {
+    # Generate the full grid
+    unique_vals <- lapply(splits, function(x) {
+      if (is.factor(x)) {
+        factor(levels(x), levels = levels(x), ordered = is.ordered(x))
+      } else {
+        sort(unique(x), na.last = TRUE)
+      }
+    })
+    
+    # expand.grid varies the FIRST argument fastest
+    # But id(drop=FALSE) varies the LAST argument fastest
+    # So we expand.grid(rev(unique_vals)), then reverse the columns
+    grid <- expand.grid(rev(unique_vals), KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
+    grid <- grid[rev(seq_along(grid))]
+  }
+  
+  if (!is.null(names(splits))) {
+    names(grid) <- names(splits)
+  }
+  
+  grid
+}
 
 cast <- function(data, formula, fun.aggregate = NULL, ..., subset = NULL, fill = NULL, drop = TRUE, value.var = guess_value(data), value_var) {
 

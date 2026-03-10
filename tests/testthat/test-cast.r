@@ -211,3 +211,47 @@ test_that("useful error message if value.var doesn't exist", {
   expect_error(dcast(airquality, month ~ day, value.var = "test"),
     "value.var (test) not found in input", fixed = TRUE)
 })
+
+test_that("split_labels constructs empty data.frame for empty input", {
+  expect_equal(split_labels(list(), drop = TRUE), data.frame())
+  expect_equal(split_labels(list(), drop = FALSE), data.frame())
+})
+
+test_that("split_labels with drop=TRUE extracts active combinations", {
+  x <- c("a", "b", "a")
+  y <- c(1, 2, 1)
+  vars <- list(x = x, y = y)
+  ids <- id(vars, drop = TRUE)
+
+  labels <- split_labels(vars, drop = TRUE, id = ids)
+
+  expect_equal(nrow(labels), 2)
+  expect_equal(labels$x, c("a", "b"))
+  expect_equal(labels$y, c(1, 2))
+})
+
+test_that("split_labels with drop=FALSE constructs full Cartesian grid where last varies fastest", {
+  x <- factor(c("a", "b"))
+  y <- c(1, 2)
+  vars <- list(x = x, y = y)
+
+  labels <- split_labels(vars, drop = FALSE)
+
+  # Total combinations = 4
+  expect_equal(nrow(labels), 4)
+
+  # Last varies fastest means y is 1, 2, 1, 2 and x is a, a, b, b
+  expect_equal(labels$x, factor(c("a", "a", "b", "b")))
+  expect_equal(labels$y, c(1, 2, 1, 2))
+})
+
+test_that("split_labels handles NA values correctly", {
+  x <- c("a", NA)
+  y <- factor(c("b", "c"))
+  vars <- list(x = x, y = y)
+
+  # drop = FALSE should still include NA as a level
+  labels_f <- split_labels(vars, drop = FALSE)
+  expect_equal(nrow(labels_f), 4)
+  expect_true(any(is.na(labels_f$x)))
+})
